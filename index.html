@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PDF 智能流水分析</title>
+    <title>全能流水转换器 | 微信支付宝银行</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 PDF.js -->
@@ -15,38 +15,52 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
-        .drag-active { border-color: #3b82f6; background-color: #eff6ff; }
-        .loader {
-            border: 3px solid #e2e8f0; border-top: 3px solid #3b82f6; border-radius: 50%;
-            width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; -webkit-tap-highlight-color: transparent; }
+        .drag-active { border-color: #1677ff; background-color: #e6f7ff; }
         .fade-in { animation: fadeIn 0.4s ease-out forwards; opacity: 0; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* 微信提示遮罩 */
+        #wx-mask { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 999; text-align: right; padding-top: 40px; padding-right: 30px; }
+        #wx-mask p { color: #fff; font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px; }
+        .badge-wx { background: #07c160; color: white; }
+        .badge-ali { background: #1677ff; color: white; }
+        .badge-bank { background: #faad14; color: white; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col justify-center p-4 sm:p-6">
+<body class="min-h-screen flex flex-col justify-center p-4">
 
-    <div class="bg-white p-6 sm:p-10 rounded-2xl shadow-lg w-full max-w-4xl border border-gray-100 mx-auto">
+    <!-- 微信/QQ打开时的提示遮罩 -->
+    <div id="wx-mask" onclick="this.style.display='none'">
+        <p>↗ 点击右上角 ...</p>
+        <p>选择【在浏览器打开】</p>
+        <p class="text-sm font-normal opacity-80 mt-2">否则无法保存 Excel 文件</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-xl w-full max-w-4xl border border-gray-200 mx-auto">
         <!-- 标题区 -->
-        <div class="text-center mb-6 sm:mb-10">
-            <h1 class="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">💰 PDF 流水智能分析</h1>
-            <p class="text-sm text-slate-500 px-4">手机端专用 · 自动剔除无效流水 · 计算真实收入</p>
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">💸 全能流水转换器</h1>
+            <div class="flex justify-center gap-2 mt-3">
+                <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded font-medium">微信支付</span>
+                <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded font-medium">支付宝</span>
+                <span class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded font-medium">手机银行</span>
+            </div>
+            <p class="text-xs text-gray-400 mt-3">智能识别格式 · 自动合并摘要 · 剔除无效流水</p>
         </div>
 
-        <!-- 上传区 (适配手机触摸) -->
-        <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 sm:p-12 text-center active:bg-blue-50 transition-all duration-200 group relative overflow-hidden touch-manipulation">
+        <!-- 上传区 -->
+        <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center active:bg-gray-50 transition-all duration-200 relative overflow-hidden">
             <input type="file" id="file-input" class="hidden" accept=".pdf">
             <div class="relative z-10 flex flex-col items-center justify-center space-y-3">
-                <div class="p-4 bg-blue-50 rounded-full text-blue-600 mb-2">
+                <div class="p-4 bg-gray-100 rounded-full text-gray-500 mb-2">
                     <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
                 </div>
                 <div>
-                    <div class="text-lg font-bold text-slate-700">点击选择 PDF 文件</div>
-                    <p class="text-xs text-slate-400 mt-2">支持微信/支付宝账单</p>
+                    <div class="text-lg font-bold text-gray-700">点击上传 PDF 账单</div>
+                    <p class="text-xs text-gray-400 mt-2">支持各大银行电子回单/流水单</p>
                 </div>
             </div>
         </div>
@@ -54,49 +68,48 @@
         <!-- 状态与进度 -->
         <div id="status-area" class="mt-6 hidden fade-in">
             <div class="flex items-center justify-between mb-2">
-                <span id="status-text" class="text-slate-700 font-medium text-xs">准备就绪</span>
+                <span id="status-text" class="text-gray-700 font-medium text-xs">正在解析...</span>
                 <span id="percent-text" class="text-blue-600 font-bold text-xs">0%</span>
             </div>
-            <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                 <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
-            <p id="analysis-msg" class="text-xs text-slate-400 mt-2 text-center h-4 truncate"></p>
+            <div id="detected-type" class="text-center mt-3 h-5"></div>
         </div>
 
         <!-- 结果与下载 -->
         <div id="result-area" class="mt-8 hidden fade-in">
-            <!-- 收入概览卡片 (手机端自动竖排) -->
-            <div class="grid grid-cols-1 gap-3 mb-6">
-                <div class="bg-blue-50 rounded-lg p-4 border border-blue-100 flex justify-between items-center">
-                    <div>
-                        <div class="text-blue-500 text-xs font-bold uppercase">原始总入账</div>
-                        <div class="text-lg font-bold text-slate-800 mt-1" id="total-raw-income">¥ 0.00</div>
-                    </div>
+            <!-- 数据卡片 -->
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-gray-50 rounded-lg p-3 border border-gray-200 text-center">
+                    <div class="text-gray-500 text-[10px] font-bold uppercase">原始入账</div>
+                    <div class="text-lg font-bold text-gray-800" id="total-raw-income">¥ 0.00</div>
                 </div>
-                <div class="bg-green-50 rounded-lg p-4 border border-green-100 relative overflow-hidden">
-                    <div class="text-green-600 text-xs font-bold uppercase mb-1">清洗后·实际有效收入</div>
-                    <div class="text-2xl font-bold text-green-700" id="total-real-income">¥ 0.00</div>
-                    <p class="text-xs text-green-600/70 mt-1">已剔除无效及过桥资金</p>
+                <div class="bg-green-50 rounded-lg p-3 border border-green-200 text-center relative overflow-hidden">
+                    <div class="text-green-600 text-[10px] font-bold uppercase">有效收入</div>
+                    <div class="text-xl font-bold text-green-700" id="total-real-income">¥ 0.00</div>
+                    <!-- 装饰图标 -->
+                    <svg class="absolute -right-2 -bottom-2 w-12 h-12 text-green-200 opacity-50" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
                 </div>
             </div>
 
-            <div class="text-center">
-                <button id="download-btn" class="w-full sm:w-auto bg-slate-900 hover:bg-black text-white font-bold py-3.5 px-8 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center mx-auto text-sm">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    保存 Excel 报表
-                </button>
-                <p class="text-xs text-slate-400 mt-3 px-2">提示：iPhone 用户下载后请在“文件”App中查看</p>
-            </div>
+            <button id="download-btn" class="w-full bg-black hover:bg-gray-800 text-white font-bold py-3.5 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center text-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                导出 Excel 报表
+            </button>
+            
+            <p class="text-center text-[10px] text-gray-400 mt-4 px-4 leading-relaxed">
+                安卓下载后请至【文件管理 > Download】查看<br>iOS 请保存至【文件】App
+            </p>
         </div>
-
     </div>
 
-    <div class="mt-6 text-center text-slate-400 text-[10px]">
-        <p>🔒 本地安全计算，无数据上传</p>
+    <div class="mt-8 text-center text-gray-300 text-[10px]">
+        <p>🛡️ 安全承诺：纯前端解析，无服务器上传</p>
     </div>
 
 <script>
-    // 获取 DOM 元素
+    // DOM Elements
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const statusArea = document.getElementById('status-area');
@@ -105,48 +118,47 @@
     const percentText = document.getElementById('percent-text');
     const progressBar = document.getElementById('progress-bar');
     const downloadBtn = document.getElementById('download-btn');
-    const analysisMsg = document.getElementById('analysis-msg');
+    const detectedTypeDiv = document.getElementById('detected-type');
+    const wxMask = document.getElementById('wx-mask');
 
     let finalGridData = [];
     let currentFileName = '';
     let allRawItems = [];
 
-    // --- UI 交互 (适配触摸) ---
-    dropZone.addEventListener('click', () => fileInput.click());
+    // --- 0. 环境与交互 ---
+    function isWeChatOrQQ() {
+        const ua = navigator.userAgent.toLowerCase();
+        return ua.indexOf('micromessenger') !== -1 || ua.indexOf('qq/') !== -1;
+    }
+
+    dropZone.addEventListener('click', () => {
+        if(isWeChatOrQQ()) { wxMask.style.display = 'block'; return; }
+        fileInput.click()
+    });
     
-    // 手机端不需要 dragover/drop，主要依赖 click
     fileInput.addEventListener('change', (e) => {
         if (e.target.files.length) handleFile(e.target.files[0]);
     });
 
-    // --- 主处理流程 ---
+    // --- 1. 文件处理主流程 ---
     async function handleFile(file) {
         if (file.type !== 'application/pdf') {
-            alert('请上传 PDF 文件！');
+            alert('请上传 PDF 格式文件');
             return;
         }
 
         currentFileName = file.name.replace('.pdf', '');
-        
-        // UI 重置
-        statusArea.classList.remove('hidden');
-        resultArea.classList.add('hidden');
-        dropZone.classList.add('opacity-50', 'pointer-events-none');
-        progressBar.style.width = '0%';
-        allRawItems = [];
-        analysisMsg.innerText = "准备解析...";
+        resetUI();
 
         try {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
             const totalPages = pdf.numPages;
             
-            // 1. 提取内容
+            // 提取
             for (let i = 1; i <= totalPages; i++) {
-                statusText.innerText = `读取中 ${i}/${totalPages}`;
-                let pct = Math.round((i / totalPages) * 60); 
-                progressBar.style.width = `${pct}%`;
-                percentText.innerText = `${pct}%`;
+                statusText.innerText = `扫描页面 ${i}/${totalPages}`;
+                updateProgress((i / totalPages) * 60);
                 
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
@@ -164,51 +176,68 @@
                 });
             }
 
-            // 2. 结构化
-            statusText.innerText = "正在整理表格...";
-            progressBar.style.width = '75%';
-            percentText.innerText = '75%';
+            // 结构化
+            statusText.innerText = "表格对齐重组...";
+            updateProgress(75);
             
-            // 延时让UI渲染
             setTimeout(() => {
                 let grid = processSmartGrid(allRawItems);
                 
-                // 3. 金融分析
-                statusText.innerText = "正在清洗数据...";
-                analysisMsg.innerText = "剔除无效资金与过桥流水...";
-                progressBar.style.width = '90%';
-                percentText.innerText = '90%';
+                // 识别与分析
+                statusText.innerText = "识别流水类型...";
+                updateProgress(85);
 
                 setTimeout(() => {
                     finalGridData = analyzeFinancials(grid);
-                    
-                    progressBar.style.width = '100%';
-                    percentText.innerText = '100%';
-                    statusArea.classList.add('hidden');
-                    resultArea.classList.remove('hidden');
-                    dropZone.classList.remove('opacity-50', 'pointer-events-none');
+                    updateProgress(100);
+                    showResult();
                 }, 300);
             }, 50);
 
         } catch (error) {
             console.error(error);
-            alert('解析失败，请确保 PDF 未加密');
+            if (error.name === 'PasswordException') {
+                alert('该 PDF 已加密，请先移除密码后再上传。');
+            } else {
+                alert('解析失败，请确保文件完整。');
+            }
             statusArea.classList.add('hidden');
             dropZone.classList.remove('opacity-50', 'pointer-events-none');
         }
     }
 
-    // --- 核心算法1：智能表格对齐 ---
+    function resetUI() {
+        statusArea.classList.remove('hidden');
+        resultArea.classList.add('hidden');
+        dropZone.classList.add('opacity-50', 'pointer-events-none');
+        updateProgress(0);
+        allRawItems = [];
+        detectedTypeDiv.innerHTML = '';
+    }
+
+    function updateProgress(val) {
+        const v = Math.round(val);
+        progressBar.style.width = `${v}%`;
+        percentText.innerText = `${v}%`;
+    }
+
+    function showResult() {
+        statusArea.classList.add('hidden');
+        resultArea.classList.remove('hidden');
+        dropZone.classList.remove('opacity-50', 'pointer-events-none');
+    }
+
+    // --- 2. 核心算法：智能对齐 ---
     function processSmartGrid(items) {
         if (items.length === 0) return [];
-        const Y_TOLERANCE = 4;
-        const X_TOLERANCE = 15; 
+        const Y_TOLERANCE = 4; // 行高容差
+        const X_TOLERANCE = 15; // 列宽容差
 
         let allRows = [];
         const maxPage = items[items.length - 1].page;
         for (let p = 1; p <= maxPage; p++) {
             let pageItems = items.filter(i => i.page === p);
-            pageItems.sort((a, b) => b.y - a.y);
+            pageItems.sort((a, b) => b.y - a.y); // Y轴从大到小（PDF坐标系）
             let currentRows = [];
             pageItems.forEach(item => {
                 let foundRow = currentRows.find(r => Math.abs(r.y - item.y) < Y_TOLERANCE);
@@ -247,23 +276,35 @@
         return grid;
     }
 
-    // --- 核心算法2：金融逻辑 (含快进快出剔除) ---
+    // --- 3. 核心算法：全能金融分析 ---
     function analyzeFinancials(grid) {
         if (!grid || grid.length < 2) return grid;
 
         let headerRowIdx = -1;
-        let colMap = { date: -1, amount: -1, desc: -1 };
+        let colMap = { date: -1, amount: -1, desc: -1, type: -1 }; // type: 收/支列
+        let detectedSource = '通用格式';
 
-        // 找表头
-        for (let r = 0; r < Math.min(grid.length, 15); r++) {
+        // 智能识别表头与来源
+        for (let r = 0; r < Math.min(grid.length, 20); r++) {
             const rowStr = grid[r].join(" ").toLowerCase();
-            if ((rowStr.includes("金额") || rowStr.includes("amount")) && (rowStr.includes("时间") || rowStr.includes("日期"))) {
+            
+            // 来源特征词
+            if (rowStr.includes("微信支付")) detectedSource = '微信支付';
+            else if (rowStr.includes("支付宝")) detectedSource = '支付宝';
+            else if (rowStr.includes("银行") || rowStr.includes("借方金额")) detectedSource = '银行流水';
+
+            // 表头特征
+            if ((rowStr.includes("金额") || rowStr.includes("amount") || rowStr.includes("借方")) && 
+                (rowStr.includes("时间") || rowStr.includes("日期") || rowStr.includes("date"))) {
                 headerRowIdx = r;
+                
                 grid[r].forEach((cell, cIdx) => {
                     const txt = cell.trim();
                     if (txt.includes("时间") || txt.includes("日期") || txt.match(/\d{4}-\d{2}/)) colMap.date = cIdx;
-                    else if (txt.includes("金额") || txt.includes("amount")) colMap.amount = cIdx;
-                    else if (txt.includes("摘要") || txt.includes("说明") || txt.includes("对方") || txt.includes("商品") || txt.includes("备注")) {
+                    else if (txt === "金额(元)" || txt === "金额" || txt.includes("交易金额") || txt.includes("贷方发生额")) colMap.amount = cIdx;
+                    else if (txt.includes("收/支") || txt.includes("收支") || txt.includes("资金状态")) colMap.type = cIdx; // 微信/支付宝特有
+                    else if (txt.includes("商品") || txt.includes("摘要") || txt.includes("对方") || txt.includes("备注")) {
+                        // 优先选择内容丰富的列
                         if (colMap.desc === -1) colMap.desc = cIdx;
                     }
                 });
@@ -271,10 +312,18 @@
             }
         }
 
+        // 显示识别结果
+        let badgeClass = 'bg-gray-500';
+        if(detectedSource.includes('微信')) badgeClass = 'badge-wx';
+        if(detectedSource.includes('支付宝')) badgeClass = 'badge-ali';
+        if(detectedSource.includes('银行')) badgeClass = 'badge-bank';
+        detectedTypeDiv.innerHTML = `<span class="badge ${badgeClass}">${detectedSource}</span>`;
+
         if (headerRowIdx === -1 || colMap.amount === -1) return grid;
 
+        // 扩展表头
         grid[headerRowIdx].push("实际有效收入");
-        grid[headerRowIdx].push("备注说明");
+        grid[headerRowIdx].push("智能备注");
 
         let transactions = [];
         let totalRawIncome = 0;
@@ -283,51 +332,69 @@
             const row = grid[r];
             const dateStr = colMap.date > -1 ? row[colMap.date] : "";
             const amountStr = row[colMap.amount];
-            const descStr = colMap.desc > -1 ? grid[r].map((c, i) => (i !== colMap.date && i !== colMap.amount) ? c : "").join(" ") : "";
+            // 合并所有可能的描述信息，防止漏掉“对方名称”
+            const descStr = grid[r].map((c, i) => (i !== colMap.date && i !== colMap.amount && i !== colMap.type) ? c : "").join(" ").trim();
+            const typeStr = colMap.type > -1 ? row[colMap.type] : ""; // 收/支 列的内容
 
+            // 1. 日期解析
             const dateMatch = dateStr.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/);
             const dateKey = dateMatch ? dateMatch[0].replace(/[./]/g, '-') : "unknown";
 
+            // 2. 金额与收支判断
             let amountVal = 0;
-            let type = "unknown";
+            let flowType = "unknown"; // income, expense
+
             if (amountStr) {
                 const cleanAmt = amountStr.replace(/[¥,]/g, "").trim();
                 amountVal = parseFloat(cleanAmt);
-                if (amountStr.includes("-") || cleanAmt.startsWith("-")) {
-                    type = "expense";
-                    amountVal = Math.abs(amountVal);
+                
+                // 优先级 1: 明确的“收/支”列 (微信/支付宝)
+                if (typeStr.includes("支出") || typeStr.includes("支付")) {
+                    flowType = "expense";
+                } else if (typeStr.includes("收入") || typeStr.includes("转入") || typeStr.includes("解冻")) {
+                    flowType = "income";
+                } 
+                // 优先级 2: 金额符号 (银行/通用)
+                else if (amountStr.includes("-") || cleanAmt.startsWith("-")) {
+                    flowType = "expense";
                 } else if (amountStr.includes("+") || !isNaN(amountVal)) {
-                    type = "income";
-                    totalRawIncome += amountVal;
+                    // 对于某些银行借贷列分开的情况，需额外逻辑，这里主要处理单列金额
+                    flowType = "income"; 
                 }
+
+                amountVal = Math.abs(amountVal); // 统一转正数处理
+                
+                if (flowType === "income") totalRawIncome += amountVal;
             }
 
             transactions.push({
                 rIdx: r,
                 date: dateKey,
                 amount: amountVal,
-                type: type,
+                type: flowType,
                 desc: descStr,
                 isExcluded: false,
                 reason: ""
             });
         }
 
-        // 清洗: 关键词
-        const excludeKeywords = ["本人", "自己", "提现", "充值", "理财", "赎回", "借呗", "微粒贷", "还款", "退款", "信用卡"];
+        // 3. 智能清洗
+        const excludeKeywords = ["本人", "自己", "提现", "充值", "理财", "赎回", "借呗", "微粒贷", "信用卡", "还款", "退款", "定期"];
+        
         transactions.forEach(tx => {
             if (tx.type === "income") {
+                // 关键词排除
                 for (let kw of excludeKeywords) {
                     if (tx.desc.includes(kw)) {
                         tx.isExcluded = true;
-                        tx.reason = `剔除: ${kw}`;
+                        tx.reason = `排除: ${kw}`;
                         break;
                     }
                 }
             }
         });
 
-        // 清洗: 当日快进快出
+        // 4. 当日快进快出排除 (金额相似度匹配)
         const txByDate = {};
         transactions.forEach(tx => {
             if (tx.date === "unknown") return;
@@ -341,18 +408,19 @@
             const expenses = dayTxs.filter(t => t.type === "expense");
 
             incomes.forEach(inc => {
+                // 寻找金额相近的支出 (误差 < 1%)
                 const matchExp = expenses.find(exp => {
                     const diff = Math.abs(exp.amount - inc.amount);
                     return diff < 5 || (diff / inc.amount < 0.01);
                 });
                 if (matchExp) {
                     inc.isExcluded = true;
-                    inc.reason = `剔除: 快进快出 (¥${matchExp.amount})`;
+                    inc.reason = `排除: 快进快出 (¥${matchExp.amount})`;
                 }
             });
         });
 
-        // 汇总与回填
+        // 5. 汇总与回填
         let totalRealIncome = 0;
         transactions.forEach(tx => {
             const row = grid[tx.rIdx];
@@ -362,11 +430,11 @@
                     row.push(tx.reason);
                 } else {
                     row.push(tx.amount.toFixed(2));
-                    row.push("有效");
+                    row.push("有效收入");
                     totalRealIncome += tx.amount;
                 }
             } else {
-                row.push("");
+                row.push(""); // 支出行留空
                 row.push("");
             }
         });
@@ -382,15 +450,22 @@
         return grid;
     }
 
-    // --- 下载 Excel ---
+    // --- 4. 导出 ---
     downloadBtn.addEventListener('click', () => {
         if (!finalGridData.length) return;
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(finalGridData);
-        const wscols = finalGridData[0].map(() => ({wch: 18}));
+        // 优化列宽
+        const wscols = finalGridData[0].map((_, i) => ({wch: i === finalGridData[0].length - 1 ? 30 : 18}));
         ws['!cols'] = wscols;
+        
         XLSX.utils.book_append_sheet(wb, ws, "流水分析");
-        XLSX.writeFile(wb, `${currentFileName}_分析报表.xlsx`);
+        XLSX.writeFile(wb, `${currentFileName}_智能分析.xlsx`);
+        
+        // 延迟提示
+        setTimeout(() => {
+            alert('📥 下载已开始\n安卓用户请查看通知栏或 Download 文件夹');
+        }, 800);
     });
 
 </script>
