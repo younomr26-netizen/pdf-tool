@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PDF 智能流水分析</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <!-- 引入 SheetJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+        .drag-active { border-color: #3b82f6; background-color: #eff6ff; }
+        .loader {
+            border: 3px solid #e2e8f0; border-top: 3px solid #3b82f6; border-radius: 50%;
+            width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; opacity: 0; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-center p-4 sm:p-6">
+
+    <div class="bg-white p-6 sm:p-10 rounded-2xl shadow-lg w-full max-w-4xl border border-gray-100 mx-auto">
+        <!-- 标题区 -->
+        <div class="text-center mb-6 sm:mb-10">
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">💰 PDF 流水智能分析</h1>
+            <p class="text-sm text-slate-500 px-4">手机端专用 · 自动剔除无效流水 · 计算真实收入</p>
+        </div>
+
+        <!-- 上传区 (适配手机触摸) -->
+        <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 sm:p-12 text-center active:bg-blue-50 transition-all duration-200 group relative overflow-hidden touch-manipulation">
+            <input type="file" id="file-input" class="hidden" accept=".pdf">
+            <div class="relative z-10 flex flex-col items-center justify-center space-y-3">
+                <div class="p-4 bg-blue-50 rounded-full text-blue-600 mb-2">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                </div>
+                <div>
+                    <div class="text-lg font-bold text-slate-700">点击选择 PDF 文件</div>
+                    <p class="text-xs text-slate-400 mt-2">支持微信/支付宝账单</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 状态与进度 -->
+        <div id="status-area" class="mt-6 hidden fade-in">
+            <div class="flex items-center justify-between mb-2">
+                <span id="status-text" class="text-slate-700 font-medium text-xs">准备就绪</span>
+                <span id="percent-text" class="text-blue-600 font-bold text-xs">0%</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="analysis-msg" class="text-xs text-slate-400 mt-2 text-center h-4 truncate"></p>
+        </div>
+
+        <!-- 结果与下载 -->
+        <div id="result-area" class="mt-8 hidden fade-in">
+            <!-- 收入概览卡片 (手机端自动竖排) -->
+            <div class="grid grid-cols-1 gap-3 mb-6">
+                <div class="bg-blue-50 rounded-lg p-4 border border-blue-100 flex justify-between items-center">
+                    <div>
+                        <div class="text-blue-500 text-xs font-bold uppercase">原始总入账</div>
+                        <div class="text-lg font-bold text-slate-800 mt-1" id="total-raw-income">¥ 0.00</div>
+                    </div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4 border border-green-100 relative overflow-hidden">
+                    <div class="text-green-600 text-xs font-bold uppercase mb-1">清洗后·实际有效收入</div>
+                    <div class="text-2xl font-bold text-green-700" id="total-real-income">¥ 0.00</div>
+                    <p class="text-xs text-green-600/70 mt-1">已剔除无效及过桥资金</p>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <button id="download-btn" class="w-full sm:w-auto bg-slate-900 hover:bg-black text-white font-bold py-3.5 px-8 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center mx-auto text-sm">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    保存 Excel 报表
+                </button>
+                <p class="text-xs text-slate-400 mt-3 px-2">提示：iPhone 用户下载后请在“文件”App中查看</p>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="mt-6 text-center text-slate-400 text-[10px]">
+        <p>🔒 本地安全计算，无数据上传</p>
+    </div>
+
+<script>
+    // 获取 DOM 元素
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const statusArea = document.getElementById('status-area');
+    const resultArea = document.getElementById('result-area');
+    const statusText = document.getElementById('status-text');
+    const percentText = document.getElementById('percent-text');
+    const progressBar = document.getElementById('progress-bar');
+    const downloadBtn = document.getElementById('download-btn');
+    const analysisMsg = document.getElementById('analysis-msg');
+
+    let finalGridData = [];
+    let currentFileName = '';
+    let allRawItems = [];
+
+    // --- UI 交互 (适配触摸) ---
+    dropZone.addEventListener('click', () => fileInput.click());
+    
+    // 手机端不需要 dragover/drop，主要依赖 click
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) handleFile(e.target.files[0]);
+    });
+
+    // --- 主处理流程 ---
+    async function handleFile(file) {
+        if (file.type !== 'application/pdf') {
+            alert('请上传 PDF 文件！');
+            return;
+        }
+
+        currentFileName = file.name.replace('.pdf', '');
+        
+        // UI 重置
+        statusArea.classList.remove('hidden');
+        resultArea.classList.add('hidden');
+        dropZone.classList.add('opacity-50', 'pointer-events-none');
+        progressBar.style.width = '0%';
+        allRawItems = [];
+        analysisMsg.innerText = "准备解析...";
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            const totalPages = pdf.numPages;
+            
+            // 1. 提取内容
+            for (let i = 1; i <= totalPages; i++) {
+                statusText.innerText = `读取中 ${i}/${totalPages}`;
+                let pct = Math.round((i / totalPages) * 60); 
+                progressBar.style.width = `${pct}%`;
+                percentText.innerText = `${pct}%`;
+                
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                textContent.items.forEach(item => {
+                    const text = item.str.trim();
+                    if (text) {
+                        allRawItems.push({
+                            x: Math.round(item.transform[4]),
+                            y: Math.round(item.transform[5]),
+                            text: text,
+                            page: i
+                        });
+                    }
+                });
+            }
+
+            // 2. 结构化
+            statusText.innerText = "正在整理表格...";
+            progressBar.style.width = '75%';
+            percentText.innerText = '75%';
+            
+            // 延时让UI渲染
+            setTimeout(() => {
+                let grid = processSmartGrid(allRawItems);
+                
+                // 3. 金融分析
+                statusText.innerText = "正在清洗数据...";
+                analysisMsg.innerText = "剔除无效资金与过桥流水...";
+                progressBar.style.width = '90%';
+                percentText.innerText = '90%';
+
+                setTimeout(() => {
+                    finalGridData = analyzeFinancials(grid);
+                    
+                    progressBar.style.width = '100%';
+                    percentText.innerText = '100%';
+                    statusArea.classList.add('hidden');
+                    resultArea.classList.remove('hidden');
+                    dropZone.classList.remove('opacity-50', 'pointer-events-none');
+                }, 300);
+            }, 50);
+
+        } catch (error) {
+            console.error(error);
+            alert('解析失败，请确保 PDF 未加密');
+            statusArea.classList.add('hidden');
+            dropZone.classList.remove('opacity-50', 'pointer-events-none');
+        }
+    }
+
+    // --- 核心算法1：智能表格对齐 ---
+    function processSmartGrid(items) {
+        if (items.length === 0) return [];
+        const Y_TOLERANCE = 4;
+        const X_TOLERANCE = 15; 
+
+        let allRows = [];
+        const maxPage = items[items.length - 1].page;
+        for (let p = 1; p <= maxPage; p++) {
+            let pageItems = items.filter(i => i.page === p);
+            pageItems.sort((a, b) => b.y - a.y);
+            let currentRows = [];
+            pageItems.forEach(item => {
+                let foundRow = currentRows.find(r => Math.abs(r.y - item.y) < Y_TOLERANCE);
+                if (foundRow) foundRow.items.push(item);
+                else currentRows.push({ y: item.y, items: [item] });
+            });
+            allRows.push(...currentRows);
+        }
+
+        let allX = items.map(i => i.x);
+        let columnCenters = [];
+        allX.sort((a, b) => a - b);
+        allX.forEach(x => {
+            let foundCol = columnCenters.find(c => Math.abs(c - x) < X_TOLERANCE);
+            if (!foundCol) columnCenters.push(x);
+        });
+        columnCenters.sort((a, b) => a - b);
+
+        let grid = [];
+        allRows.forEach(row => {
+            let rowData = new Array(columnCenters.length).fill("");
+            row.items.forEach(item => {
+                let bestColIndex = -1;
+                let minDiff = Infinity;
+                columnCenters.forEach((colX, index) => {
+                    let diff = Math.abs(colX - item.x);
+                    if (diff < minDiff) { minDiff = diff; bestColIndex = index; }
+                });
+                if (bestColIndex !== -1) {
+                    if (rowData[bestColIndex]) rowData[bestColIndex] += " " + item.text;
+                    else rowData[bestColIndex] = item.text;
+                }
+            });
+            if (rowData.some(cell => cell.trim() !== "")) grid.push(rowData);
+        });
+        return grid;
+    }
+
+    // --- 核心算法2：金融逻辑 (含快进快出剔除) ---
+    function analyzeFinancials(grid) {
+        if (!grid || grid.length < 2) return grid;
+
+        let headerRowIdx = -1;
+        let colMap = { date: -1, amount: -1, desc: -1 };
+
+        // 找表头
+        for (let r = 0; r < Math.min(grid.length, 15); r++) {
+            const rowStr = grid[r].join(" ").toLowerCase();
+            if ((rowStr.includes("金额") || rowStr.includes("amount")) && (rowStr.includes("时间") || rowStr.includes("日期"))) {
+                headerRowIdx = r;
+                grid[r].forEach((cell, cIdx) => {
+                    const txt = cell.trim();
+                    if (txt.includes("时间") || txt.includes("日期") || txt.match(/\d{4}-\d{2}/)) colMap.date = cIdx;
+                    else if (txt.includes("金额") || txt.includes("amount")) colMap.amount = cIdx;
+                    else if (txt.includes("摘要") || txt.includes("说明") || txt.includes("对方") || txt.includes("商品") || txt.includes("备注")) {
+                        if (colMap.desc === -1) colMap.desc = cIdx;
+                    }
+                });
+                break;
+            }
+        }
+
+        if (headerRowIdx === -1 || colMap.amount === -1) return grid;
+
+        grid[headerRowIdx].push("实际有效收入");
+        grid[headerRowIdx].push("备注说明");
+
+        let transactions = [];
+        let totalRawIncome = 0;
+        
+        for (let r = headerRowIdx + 1; r < grid.length; r++) {
+            const row = grid[r];
+            const dateStr = colMap.date > -1 ? row[colMap.date] : "";
+            const amountStr = row[colMap.amount];
+            const descStr = colMap.desc > -1 ? grid[r].map((c, i) => (i !== colMap.date && i !== colMap.amount) ? c : "").join(" ") : "";
+
+            const dateMatch = dateStr.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/);
+            const dateKey = dateMatch ? dateMatch[0].replace(/[./]/g, '-') : "unknown";
+
+            let amountVal = 0;
+            let type = "unknown";
+            if (amountStr) {
+                const cleanAmt = amountStr.replace(/[¥,]/g, "").trim();
+                amountVal = parseFloat(cleanAmt);
+                if (amountStr.includes("-") || cleanAmt.startsWith("-")) {
+                    type = "expense";
+                    amountVal = Math.abs(amountVal);
+                } else if (amountStr.includes("+") || !isNaN(amountVal)) {
+                    type = "income";
+                    totalRawIncome += amountVal;
+                }
+            }
+
+            transactions.push({
+                rIdx: r,
+                date: dateKey,
+                amount: amountVal,
+                type: type,
+                desc: descStr,
+                isExcluded: false,
+                reason: ""
+            });
+        }
+
+        // 清洗: 关键词
+        const excludeKeywords = ["本人", "自己", "提现", "充值", "理财", "赎回", "借呗", "微粒贷", "还款", "退款", "信用卡"];
+        transactions.forEach(tx => {
+            if (tx.type === "income") {
+                for (let kw of excludeKeywords) {
+                    if (tx.desc.includes(kw)) {
+                        tx.isExcluded = true;
+                        tx.reason = `剔除: ${kw}`;
+                        break;
+                    }
+                }
+            }
+        });
+
+        // 清洗: 当日快进快出
+        const txByDate = {};
+        transactions.forEach(tx => {
+            if (tx.date === "unknown") return;
+            if (!txByDate[tx.date]) txByDate[tx.date] = [];
+            txByDate[tx.date].push(tx);
+        });
+
+        Object.keys(txByDate).forEach(date => {
+            const dayTxs = txByDate[date];
+            const incomes = dayTxs.filter(t => t.type === "income" && !t.isExcluded);
+            const expenses = dayTxs.filter(t => t.type === "expense");
+
+            incomes.forEach(inc => {
+                const matchExp = expenses.find(exp => {
+                    const diff = Math.abs(exp.amount - inc.amount);
+                    return diff < 5 || (diff / inc.amount < 0.01);
+                });
+                if (matchExp) {
+                    inc.isExcluded = true;
+                    inc.reason = `剔除: 快进快出 (¥${matchExp.amount})`;
+                }
+            });
+        });
+
+        // 汇总与回填
+        let totalRealIncome = 0;
+        transactions.forEach(tx => {
+            const row = grid[tx.rIdx];
+            if (tx.type === "income") {
+                if (tx.isExcluded) {
+                    row.push("0");
+                    row.push(tx.reason);
+                } else {
+                    row.push(tx.amount.toFixed(2));
+                    row.push("有效");
+                    totalRealIncome += tx.amount;
+                }
+            } else {
+                row.push("");
+                row.push("");
+            }
+        });
+
+        // 补齐 Footer
+        for (let r = headerRowIdx + 1; r < grid.length; r++) {
+            while (grid[r].length < grid[headerRowIdx].length) grid[r].push("");
+        }
+
+        document.getElementById('total-raw-income').innerText = `¥ ${totalRawIncome.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
+        document.getElementById('total-real-income').innerText = `¥ ${totalRealIncome.toLocaleString('zh-CN', {minimumFractionDigits: 2})}`;
+
+        return grid;
+    }
+
+    // --- 下载 Excel ---
+    downloadBtn.addEventListener('click', () => {
+        if (!finalGridData.length) return;
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(finalGridData);
+        const wscols = finalGridData[0].map(() => ({wch: 18}));
+        ws['!cols'] = wscols;
+        XLSX.utils.book_append_sheet(wb, ws, "流水分析");
+        XLSX.writeFile(wb, `${currentFileName}_分析报表.xlsx`);
+    });
+
+</script>
+</body>
+</html>
